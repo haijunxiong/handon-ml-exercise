@@ -76,7 +76,7 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
         return X[self.attribute_names].values    
 
 
-#fetch_housing_data()
+fetch_housing_data()
 housing = load_housing_data()
 
 # Divide by 1.5 to limit the number of income categories
@@ -97,9 +97,11 @@ housing_labels = strat_train_set["median_house_value"].copy()
 
 housing_num = housing.drop('ocean_proximity', axis=1)
 # alternatively: housing_num = housing.select_dtypes(include=[np.number])
+housing_cat = housing["ocean_proximity"]
 
 
 num_attribs = list(housing_num)
+#num_attribs = ["median_income"]
 cat_attribs = ["ocean_proximity"]
 
 num_pipeline = Pipeline([
@@ -125,7 +127,9 @@ housing_prepared = full_pipeline.fit_transform(housing)
 #housing_prepared.shape
 
 from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error
 
+"""
 svr_rbf = SVR(kernel='rbf', C=1e3, gamma=0.1)
 svr_lin = SVR(kernel='linear', C=1e3)
 svr_poly = SVR(kernel='poly', C=1e3, degree=2)
@@ -134,7 +138,6 @@ y_rbf = svr_rbf.fit(housing_prepared, housing_labels).predict(housing_prepared)
 y_lin = svr_lin.fit(housing_prepared, housing_labels).predict(housing_prepared)
 y_poly = svr_poly.fit(housing_prepared, housing_labels).predict(housing_prepared)
 
-from sklearn.metrics import mean_squared_error
 
 
 svr_rbf_mse = mean_squared_error(housing_labels, y_rbf)
@@ -150,7 +153,7 @@ svr_poly_rmse = np.sqrt(svr_poly_mse)
 print("svr_poly_rmse:",svr_poly_rmse)
 
 from sklearn.model_selection import GridSearchCV
-"""
+
 param_grid = [
   {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
   {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf']},
@@ -176,20 +179,42 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import RandomizedSearchCV
 from scipy.stats import randint
 
-param_distribs = {
-        'n_estimators': randint(low=1, high=200),
-        'max_features': randint(low=1, high=8),
-    }
 
-forest_reg = RandomForestRegressor(random_state=42)
-rnd_search = RandomizedSearchCV(forest_reg, param_distributions=param_distribs,
-                                n_iter=10, cv=5, scoring='neg_mean_squared_error', random_state=42)
-rnd_search.fit(housing_prepared, housing_labels)
+if __name__=='__main__':
+    param_distribs = {
+            'n_estimators': randint(low=1, high=200),
+            'max_features': randint(low=1, high=8),
+        }
 
-rnd_search_model = rnd_search.best_estimator_
+    forest_reg = RandomForestRegressor(random_state=42)
+    rnd_search = RandomizedSearchCV(forest_reg, param_distributions=param_distribs,n_jobs=5,
+                                    n_iter=10, cv=5, scoring='neg_mean_squared_error', random_state=42)
+    rnd_search.fit(housing_prepared, housing_labels)
 
-rnd_search_predictions = rnd_search_model.predict(housing_prepared)
+    rnd_search_model = rnd_search.best_estimator_
 
-rnd_search_mse = mean_squared_error(housing_labels, rnd_search_predictions)
-rnd_search_rmse = np.sqrt(rnd_search_mse)
-print(rnd_search_rmse)
+    rnd_search_predictions = rnd_search_model.predict(housing_prepared)
+
+    rnd_search_mse = mean_squared_error(housing_labels, rnd_search_predictions)
+    rnd_search_rmse = np.sqrt(rnd_search_mse)
+
+    print(rnd_search.best_params_)
+    print(rnd_search_rmse)
+
+    feature_importances = rnd_search.best_estimator_.feature_importances_
+    
+    print(feature_importances)
+
+    extra_attribs = ["rooms_per_hhold", "pop_per_hhold", "bedrooms_per_room"]
+
+
+    cat_encoder = CategoricalEncoder()
+    housing_cat_reshaped = housing_cat.values.reshape(-1, 1)
+    housing_cat_1hot = cat_encoder.fit_transform(housing_cat_reshaped)
+
+    cat_one_hot_attribs = list(cat_encoder.categories_[0])
+    attributes = num_attribs + extra_attribs + cat_one_hot_attribs
+
+    print(attributes)
+    sorted_attr=sorted(zip(feature_importances, attributes), reverse=True)
+    print(sorted_attr)
