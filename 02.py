@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 # to make this notebook's output stable across runs
-np.random.seed(42)
+
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -24,6 +24,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import Imputer
 from CategoricalEncoder import CategoricalEncoder
 
+np.random.seed(42)
 
 DOWNLOAD_ROOT = "https://raw.githubusercontent.com/ageron/handson-ml/master/"
 HOUSING_PATH = os.path.join("datasets", "housing")
