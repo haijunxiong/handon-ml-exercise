@@ -36,6 +36,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
+from sklearn.model_selection import StratifiedShuffleSplit
 
 # to make this notebook's output stable across runs
 np.random.seed(42)
@@ -151,19 +152,34 @@ def get_titanic_data(file_name):
     titanic_path = os.path.join("datasets", "titanic", file_name)
     data = pd.read_csv(titanic_path)
 
-    data_num = data.drop(labels=["PassengerId", "Name", "Survived", "Embarked", "Sex", "Ticket", "Cabin"], axis=1)
-    y_train = data["Survived"].copy()
-
-    #print(list(data))
-    # data_num = data[["Pclass", "Fare"]]
+#    data_num = data.drop(labels=["PassengerId", "Name", "Survived", "Embarked", "Sex", "Ticket", "Cabin"], axis=1)
+#   y_train = data["Survived"].copy()
 
     data["Embarked"].fillna(value='U', inplace=True)
     data["Sex"].fillna(value='unknow', inplace=True)
     data["Cabin"].fillna(value='unknow', inplace=True)
+    #data["Fare_cat"] = np.ceil(data["Fare"] / 50)
+
+    split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+    for train_index, test_index in split.split(data, data["Pclass"]):
+        strat_train_set = data.loc[train_index]
+        strat_test_set = data.loc[test_index]
+
+    X_data = strat_train_set.drop("Survived", axis=1)
+    y_data = strat_train_set["Survived"].copy()
+
+    X_test = strat_test_set.drop("Survived", axis=1)
+    y_test = strat_test_set["Survived"].copy()
+
+
+    #print(list(data))
+    data_num = strat_train_set[["Fare","Parch","Age"]]
+
 
     num_attribs = list(data_num)
     print(num_attribs)
-    cat_attribs = ["Embarked", "Sex", "Cabin"]
+    cat_attribs = ["Pclass", "Embarked", "Sex"]
+
 
     num_pipeline = Pipeline([
         ('selector', DataFrameSelector(num_attribs)),
@@ -182,9 +198,10 @@ def get_titanic_data(file_name):
         ("cat_pipeline", cat_pipeline),
     ])
 
-    data_prepared = full_pipeline.fit_transform(data)
+    X_data_prepared = full_pipeline.fit_transform(X_data)
+    X_test_prepared = full_pipeline.transform(X_test)
 
-    return data_prepared, y_train
+    return X_data_prepared, y_data,X_test_prepared,y_test
 
 def print_accuracy_score(clf,X_test,y_test):
     y_pred = clf.predict(X_test)
@@ -196,8 +213,8 @@ def titanic_predict():
 
 
     #print(data_prepared)
-    X_train,y_train = get_titanic_data("train.csv")
-    X_test, y_test = get_titanic_data("test.csv")
+    X_train,y_train,X_test, y_test = get_titanic_data("train.csv")
+    #X_test, y_test = get_titanic_data("test.csv")
 
     # sgd_clf = SGDClassifier(random_state=42)
     # sgd_clf.fit(X_train, y_train)
@@ -223,19 +240,21 @@ def titanic_predict():
     # print(precision_score(y_train, y_train_pred))
     # print(recall_score(y_train, y_train_pred) )
 
-    forest_reg = RandomForestClassifier(n_estimators=200, criterion='entropy', min_samples_leaf=18, n_jobs=-1,random_state=42)
+    forest_reg = RandomForestClassifier(n_estimators=10, criterion='gini', min_samples_leaf=2, n_jobs=-1,random_state=42)
     forest_reg.fit(X_train, y_train)
     print_prcm(forest_reg, X_train, y_train)
+    print('test')
+    print_prcm(forest_reg, X_test, y_test)
     print_accuracy_score(forest_reg,X_test,y_test)
 
     parameter_space = {
-        "n_estimators": [100,200,250,300,500],
+        "n_estimators": [5,10,20,50],
         "criterion": ["gini", "entropy"],
         "min_samples_leaf": [1,2, 4, 6,8,10,12,14,16,18,20],
     }
 
     scores = ['precision', 'recall', 'roc_auc']
-    scores = []
+    scores = ['accuracy']
 
     for score in scores:
         print("# Tuning hyper-parameters for %s" % score)
