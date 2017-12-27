@@ -197,7 +197,7 @@ def titanic_predict():
 
     #print(data_prepared)
     X_train,y_train = get_titanic_data("train.csv")
-    X_test, y_test = get_titanic_data("test.csv")
+    #X_test, y_test = get_titanic_data("test.csv")
 
     # sgd_clf = SGDClassifier(random_state=42)
     # sgd_clf.fit(X_train, y_train)
@@ -226,7 +226,7 @@ def titanic_predict():
     forest_reg = RandomForestClassifier(n_estimators=200, criterion='entropy', min_samples_leaf=18, n_jobs=-1,random_state=42)
     forest_reg.fit(X_train, y_train)
     print_prcm(forest_reg, X_train, y_train)
-    print_accuracy_score(forest_reg,X_test,y_test)
+    #print_accuracy_score(forest_reg,X_test,y_test)
 
     parameter_space = {
         "n_estimators": [100,200,250,300,500],
@@ -251,8 +251,7 @@ def titanic_predict():
         print(grid.best_params_)
         print(grid.best_score_)
         print_prcm(grid.best_estimator_,X_train,y_train)
-
-        # param_grid = [
+    # param_grid = [
     #     {'n_neighbors': [ 3,4,5], 'weights': ['distance']}
     # ]
     # #,scoring='accuracy'
@@ -279,15 +278,11 @@ def titanic_predict():
     # print(precision_score(y_train, y_train_pred))
     # print(recall_score(y_train, y_train_pred) )
 
-
-
     # y_probas_forest = cross_val_predict(clf, X_train, y_train, cv=3, method="predict_proba")
     # y_scores_forest = y_probas_forest[:, 1]  # score = proba of positive class
     # fpr_forest, tpr_forest, thresholds_forest = roc_curve(y_train, y_scores_forest)
     # print(fpr_forest, tpr_forest, thresholds_forest )
     # print(roc_auc_score(y_train, y_scores_forest))
-
-
 
 if __name__ == '__main__':
     titanic_predict()
