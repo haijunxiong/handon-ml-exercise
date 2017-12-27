@@ -68,8 +68,17 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        return X[self.attribute_names].values
+        return X[self.attribute_names]
 
+
+# Inspired from stackoverflow.com/questions/25239958
+class MostFrequentImputer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        self.most_frequent = pd.Series([X[c].value_counts().index[0] for c in X],
+                                       index=X.columns)
+        return self
+    def transform(self, X, y=None):
+        return X.fillna(self.most_frequent)
 
 def knn_predict():
     mnist = fetch_mldata('MNIST original')
@@ -155,30 +164,39 @@ def get_titanic_data(file_name):
 #    data_num = data.drop(labels=["PassengerId", "Name", "Survived", "Embarked", "Sex", "Ticket", "Cabin"], axis=1)
 #   y_train = data["Survived"].copy()
 
-    data["Embarked"].fillna(value='U', inplace=True)
-    data["Sex"].fillna(value='unknow', inplace=True)
-    data["Cabin"].fillna(value='unknow', inplace=True)
+    #data["Embarked"].fillna(value='U', inplace=True)
+    #data["Sex"].fillna(value='unknow', inplace=True)
+    #data["Cabin"].fillna(value='unknow', inplace=True)
+
+    data["CabinCat"] = data["Cabin"].isnull()
+    data["AgeBucket"] = data["Age"] // 15 * 15
+    data["RelativesOnboard"] = data["SibSp"] + data["Parch"]
+
     #data["Fare_cat"] = np.ceil(data["Fare"] / 50)
 
-    split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    for train_index, test_index in split.split(data, data["Pclass"]):
-        strat_train_set = data.loc[train_index]
-        strat_test_set = data.loc[test_index]
+    # split = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+    # for train_index, test_index in split.split(data, data["Pclass"]):
+    #     strat_train_set = data.loc[train_index]
+    #     strat_test_set = data.loc[test_index]
 
-    X_data = strat_train_set.drop("Survived", axis=1)
-    y_data = strat_train_set["Survived"].copy()
+    if  data.columns.contains('Survived'):
+        X_data = data.drop("Survived", axis=1)
+        y_data = data["Survived"].copy()
+    else:
+        X_data = data
+        y_data = None
 
-    X_test = strat_test_set.drop("Survived", axis=1)
-    y_test = strat_test_set["Survived"].copy()
+    #X_test = strat_test_set.drop("Survived", axis=1)
+    #y_test = strat_test_set["Survived"].copy()
 
 
     #print(list(data))
-    data_num = strat_train_set[["Fare","Parch","Age"]]
+    data_num = data[["Fare","Parch","Age","SibSp","RelativesOnboard","AgeBucket"]]
 
 
     num_attribs = list(data_num)
     print(num_attribs)
-    cat_attribs = ["Pclass", "Embarked", "Sex"]
+    cat_attribs = ["Pclass","Sex",  "Embarked"]
 
 
     num_pipeline = Pipeline([
@@ -189,7 +207,8 @@ def get_titanic_data(file_name):
     ])
 
     cat_pipeline = Pipeline([
-        ('selector', DataFrameSelector(cat_attribs)),
+        ('cat_selector', DataFrameSelector(cat_attribs)),
+        ("imputer", MostFrequentImputer()),
         ('cat_encoder', CategoricalEncoder(encoding="onehot-dense")),
     ])
 
@@ -199,14 +218,18 @@ def get_titanic_data(file_name):
     ])
 
     X_data_prepared = full_pipeline.fit_transform(X_data)
-    X_test_prepared = full_pipeline.transform(X_test)
+   # X_test_prepared = full_pipeline.transform(X_test)
 
-    return X_data_prepared, y_data,X_test_prepared,y_test
+    return X_data_prepared, y_data,data
 
 def print_accuracy_score(clf,X_test,y_test):
     y_pred = clf.predict(X_test)
     score = accuracy_score(y_test, y_pred)
     print(score)
+
+def output_test_data(X_test,y_pred):
+    df = pd.DataFrame(data={'PassengerId': X_test["PassengerId"],'Survived': y_pred})
+    df.to_csv("d:/out2.csv",columns=["PassengerId","Survived"],index=False)
 
 
 def titanic_predict():
@@ -214,9 +237,9 @@ def titanic_predict():
 
     #print(data_prepared)
 
-    X_train,y_train,X_test, y_test = get_titanic_data("train.csv")
+    X_train,y_train,X_data = get_titanic_data("train.csv")
 
-    #X_test, y_test = get_titanic_data("test.csv")
+    X_test, y_test, X_test_data = get_titanic_data("test.csv")
 
     # sgd_clf = SGDClassifier(random_state=42)
     # sgd_clf.fit(X_train, y_train)
@@ -242,25 +265,38 @@ def titanic_predict():
     # print(precision_score(y_train, y_train_pred))
     # print(recall_score(y_train, y_train_pred) )
 
-    forest_reg = RandomForestClassifier(n_estimators=10, criterion='gini', min_samples_leaf=2, n_jobs=-1,random_state=42)
+    forest_reg = RandomForestClassifier(n_estimators=20, criterion='gini', min_samples_leaf=2, max_features=2, max_leaf_nodes=-1, n_jobs=-1,random_state=42)
     forest_reg.fit(X_train, y_train)
     print_prcm(forest_reg, X_train, y_train)
 
-    #print_accuracy_score(forest_reg,X_test,y_test)
+
+    print_accuracy_score(forest_reg,X_train,y_train)
+
+    scores = cross_val_score(forest_reg, X_train, y_train, cv=3)
+    print(scores)
+    print(scores.mean())
 
     print('test')
-    print_prcm(forest_reg, X_test, y_test)
-    print_accuracy_score(forest_reg,X_test,y_test)
+    y_test_pred = forest_reg.predict(X_test)
+    output_test_data(X_test_data,y_test_pred)
+
+    #y_pred = forest_reg.predict(X_train)
+    #output_test_data(X_data,y_pred)
+
+    #print_prcm(forest_reg, X_test, y_test)
+    #print_accuracy_score(forest_reg,X_test,y_test)
 
 
     parameter_space = {
-        "n_estimators": [5,10,20,50],
+        "n_estimators": [5,10,20,50,60,70],
         "criterion": ["gini", "entropy"],
-        "min_samples_leaf": [1,2, 4, 6,8,10,12,14,16,18,20],
+        "min_samples_leaf": [1,2, 4, 6,8,10,12,14],
+        "max_leaf_nodes" : [-1,2,3,4],
+        "max_features" : [1,2,3,4,5,6]
     }
 
-    scores = ['precision', 'recall', 'roc_auc']
-    scores = ['accuracy']
+    scores = ['precision', 'recall', 'roc_auc','accuracy']
+    scores = []
 
     for score in scores:
         print("# Tuning hyper-parameters for %s" % score)
@@ -276,6 +312,7 @@ def titanic_predict():
         print(grid.best_params_)
         print(grid.best_score_)
         print_prcm(grid.best_estimator_,X_train,y_train)
+        print_accuracy_score(grid.best_estimator_, X_train, y_train)
     # param_grid = [
     #     {'n_neighbors': [ 3,4,5], 'weights': ['distance']}
     # ]
