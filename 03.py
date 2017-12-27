@@ -191,19 +191,21 @@ def get_titanic_data(file_name):
 
 
     #print(list(data))
-    data_num = data[["Fare","Parch","Age","SibSp","RelativesOnboard","AgeBucket"]]
+    #data_num = data[["Fare", "Parch", "Age", "SibSp", "RelativesOnboard"]]
+    #cat_attribs = ["Pclass","Sex",  "Embarked","AgeBucket"]
 
+    data_num = data[["Fare","Parch","RelativesOnboard","Age", "SibSp"]]
 
     num_attribs = list(data_num)
     print(num_attribs)
-    cat_attribs = ["Pclass","Sex",  "Embarked"]
+    cat_attribs = ["Pclass","CabinCat","Sex", "Embarked"]
 
 
     num_pipeline = Pipeline([
         ('selector', DataFrameSelector(num_attribs)),
         ('imputer', Imputer(strategy="median")),
         # ('attribs_adder', CombinedAttributesAdder()),
-        ('std_scaler', StandardScaler()),
+        #('std_scaler', StandardScaler()),
     ])
 
     cat_pipeline = Pipeline([
@@ -229,7 +231,7 @@ def print_accuracy_score(clf,X_test,y_test):
 
 def output_test_data(X_test,y_pred):
     df = pd.DataFrame(data={'PassengerId': X_test["PassengerId"],'Survived': y_pred})
-    df.to_csv("d:/out2.csv",columns=["PassengerId","Survived"],index=False)
+    df.to_csv("d:/titanic.csv",columns=["PassengerId","Survived"],index=False)
 
 
 def titanic_predict():
@@ -241,10 +243,10 @@ def titanic_predict():
 
     X_test, y_test, X_test_data = get_titanic_data("test.csv")
 
-    # sgd_clf = SGDClassifier(random_state=42)
-    # sgd_clf.fit(X_train, y_train)
-    # cvs = cross_val_score(sgd_clf, data_prepared, y_train, cv=3, scoring="accuracy")
-    # print(cvs)
+    sgd_clf = SGDClassifier(random_state=42)
+    sgd_clf.fit(X_train, y_train)
+    cvs = cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy")
+    print(cvs)
     #
     # y_train_pred = cross_val_predict(sgd_clf, X_train, y_train, cv=3)
     # cm = confusion_matrix(y_train, y_train_pred)
@@ -265,14 +267,14 @@ def titanic_predict():
     # print(precision_score(y_train, y_train_pred))
     # print(recall_score(y_train, y_train_pred) )
 
-    forest_reg = RandomForestClassifier(n_estimators=20, criterion='gini', min_samples_leaf=2, max_features=2, max_leaf_nodes=-1, n_jobs=-1,random_state=42)
+    forest_reg = RandomForestClassifier(max_features=5,n_estimators=60,min_samples_leaf=4,criterion='entropy',n_jobs=-1,random_state=42)
     forest_reg.fit(X_train, y_train)
     print_prcm(forest_reg, X_train, y_train)
 
 
     print_accuracy_score(forest_reg,X_train,y_train)
 
-    scores = cross_val_score(forest_reg, X_train, y_train, cv=3)
+    scores = cross_val_score(forest_reg, X_train, y_train, cv=10)
     print(scores)
     print(scores.mean())
 
@@ -313,26 +315,47 @@ def titanic_predict():
         print(grid.best_score_)
         print_prcm(grid.best_estimator_,X_train,y_train)
         print_accuracy_score(grid.best_estimator_, X_train, y_train)
+
+        print()
+        scores = cross_val_score(grid.best_estimator_, X_train, y_train, cv=3)
+        print(scores)
+        print(scores.mean())
+
+
+
     # param_grid = [
-    #     {'n_neighbors': [ 3,4,5], 'weights': ['distance']}
+    #     {'n_neighbors': [ 2,3,4,5], 'weights': ['distance','uniform']}
     # ]
     # #,scoring='accuracy'
-    # grid_search = GridSearchCV(KNeighborsClassifier(), param_grid, cv=5, n_jobs=5, verbose=3)
+    # grid_search = GridSearchCV(KNeighborsClassifier(), param_grid, cv=10, n_jobs=5, scoring='accuracy', verbose=3)
     # grid_search.fit(X_train, y_train)
     # print(grid_search.best_params_)
     # print(grid_search.best_estimator_)
-    # print(grid_search.cv_results_)
+    # #print(grid_search.cv_results_)
     # print(grid_search.best_score_)
-
-
-
-    # voting_clf = VotingClassifier(
-    #     estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf), ('sgd_clf', sgd_clf)],
-    #     voting='hard'
-    # )
-    # voting_clf.fit(X_train, y_train)
     #
-    # clf = voting_clf
+    # print()
+    # scores = cross_val_score(grid_search.best_estimator_, X_train, y_train, cv=5)
+    # print(scores)
+    # print(scores.mean())
+
+    knn_clf = KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',
+           metric_params=None, n_jobs=1, n_neighbors=5, p=2,
+           weights='uniform')
+
+    knn_clf.fit(X_train,y_train)
+
+    voting_clf = VotingClassifier(
+        estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('sgd_clf',sgd_clf)],
+        voting='hard'
+    )
+    voting_clf.fit(X_train, y_train)
+
+    clf = voting_clf
+
+    scores = cross_val_score(clf, X_train, y_train, cv=6)
+    print(scores)
+
     # y_train_pred = cross_val_predict(voting_clf, X_train, y_train, cv=3)
     # cm = confusion_matrix(y_train, y_train_pred)
     #
