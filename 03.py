@@ -38,6 +38,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.naive_bayes import BernoulliNB
 
 # to make this notebook's output stable across runs
 np.random.seed(42)
@@ -207,7 +210,7 @@ def get_titanic_data(file_name):
         ('imputer', Imputer(strategy="median")),
         # ('attribs_adder', CombinedAttributesAdder()),
         #("PolynomialFeatures",PolynomialFeatures(degree=4, include_bias=False)),
-        ('std_scaler', StandardScaler()),
+        #('std_scaler', StandardScaler()),
     ])
 
     cat_pipeline = Pipeline([
@@ -297,6 +300,18 @@ def titanic_svc():
 
     grid_search_clf(SVC(), parameter_space, X_train, y_train)
 
+def titanic_bayes():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+
+    parameter_space = [
+    ]
+
+    #grid_search_clf(GaussianNB(), parameter_space, X_train, y_train)
+
+    clf =BernoulliNB()
+    clf.fit(X_train,y_train)
+    print_score(clf,X_train,y_train)
+
 
 def print_score(clf,X_train, y_train):
 
@@ -346,4 +361,4 @@ def titanic_predict():
     output_test_data(X_test_data,y_test_pred)
 
 if __name__ == '__main__':
-    titanic_predict()
+    titanic_bayes()
