@@ -37,6 +37,7 @@ from sklearn.ensemble import VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.preprocessing import PolynomialFeatures
 
 # to make this notebook's output stable across runs
 np.random.seed(42)
@@ -205,7 +206,8 @@ def get_titanic_data(file_name):
         ('selector', DataFrameSelector(num_attribs)),
         ('imputer', Imputer(strategy="median")),
         # ('attribs_adder', CombinedAttributesAdder()),
-        #('std_scaler', StandardScaler()),
+        #("PolynomialFeatures",PolynomialFeatures(degree=4, include_bias=False)),
+        ('std_scaler', StandardScaler()),
     ])
 
     cat_pipeline = Pipeline([
@@ -234,140 +236,114 @@ def output_test_data(X_test,y_pred):
     df.to_csv("d:/titanic.csv",columns=["PassengerId","Survived"],index=False)
 
 
+def grid_search_clf(clf, parameter_space, X_train, y_train, score='accuracy'):
+    print("# Tuning hyper-parameters for %s" % score)
+    print()
+
+    grid = GridSearchCV(clf, parameter_space, cv=3, n_jobs=-1, scoring='%s' % score)
+    grid.fit(X_train, y_train)
+
+    print("Best parameters set found on development set:")
+    print()
+    print(grid.best_params_)
+    print(grid.best_score_)
+
+    print_score(grid.best_estimator_, X_train, y_train)
+
+
+def titanic_sgd():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+    sgd_clf = SGDClassifier(random_state=42)
+
+    parameter_space = {
+        "loss": ['hinge', 'log','modified_huber', 'squared_hinge' ,'perceptron']
+    }
+
+    grid_search_clf(sgd_clf,parameter_space,X_train,y_train)
+
+
+def titanic_knn():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+
+    parameter_space = {
+        "n_neighbors": [1,2,3,5,6,7],
+        "weights" : ['uniform','distance']
+    }
+
+    grid_search_clf(KNeighborsClassifier(), parameter_space, X_train,y_train)
+
+
+def titanic_forest():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+
+    parameter_space = {
+        "n_estimators": [80,90,100,110],
+        "criterion": ["gini", "entropy"],
+        "min_samples_leaf": [3, 4,5, 6],
+        "max_leaf_nodes" : [-1,2,3],
+        "max_features" : [4,5,6,7,8,9,10,11]
+    }
+
+    grid_search_clf(RandomForestClassifier(), parameter_space, X_train, y_train)
+
+def titanic_svc():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+
+    parameter_space = [
+        {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
+        {'C': [1, 10, 100, 1000,1100,1200], 'gamma': [0.1, 0.01, 0.001, 0.0001], 'kernel': ['rbf']},
+        {'C': [1,3,5,10], 'degree' : [2,3,4,5],  'kernel' : ["poly"] }
+    ]
+
+    grid_search_clf(SVC(), parameter_space, X_train, y_train)
+
+
+def print_score(clf,X_train, y_train):
+
+    print(clf)
+    print_accuracy_score(clf, X_train, y_train)
+
+    scores = cross_val_score(clf, X_train, y_train, cv=10, scoring="accuracy")
+    print(scores)
+    print(scores.mean())
+    print()
+
+
 def titanic_predict():
-
-
-    #print(data_prepared)
 
     X_train,y_train,X_data = get_titanic_data("train.csv")
 
     X_test, y_test, X_test_data = get_titanic_data("test.csv")
 
-    sgd_clf = SGDClassifier(random_state=42)
-    sgd_clf.fit(X_train, y_train)
-    cvs = cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy")
-    print(cvs)
-    #
-    # y_train_pred = cross_val_predict(sgd_clf, X_train, y_train, cv=3)
-    # cm = confusion_matrix(y_train, y_train_pred)
-    #
-    # print(cm)
-    # print(precision_score(y_train, y_train_pred))
-    # print(recall_score(y_train, y_train_pred) )
-    #
-    # knn_clf = KNeighborsClassifier()
-    # knn_clf.fit(X_train, y_train)
-    #
-    # y_train_pred = cross_val_predict(knn_clf, X_train, y_train, cv=3)
-    # cm = confusion_matrix(y_train, y_train_pred)
-    #
-    # print(cm)
-    #
-    # clf = knn_clf
-    # print(precision_score(y_train, y_train_pred))
-    # print(recall_score(y_train, y_train_pred) )
+    # sgd_clf = SGDClassifier(random_state=42)
+    # sgd_clf.fit(X_train, y_train)
+    # print_score(sgd_clf,X_train,y_train)
 
-    forest_reg = RandomForestClassifier(max_features=5,n_estimators=60,min_samples_leaf=4,criterion='entropy',n_jobs=-1,random_state=42)
+    svc_clf = SVC(**{'C': 3, 'degree': 3, 'kernel': 'poly','probability':True})
+    svc_clf.fit(X_train, y_train)
+    print_score(svc_clf,X_train,y_train)
+
+
+    forest_reg = RandomForestClassifier(**{'n_estimators': 80, 'max_leaf_nodes': -1, 'criterion': 'entropy', 'max_features': 10, 'min_samples_leaf': 5}, random_state=42)
     forest_reg.fit(X_train, y_train)
-    print_prcm(forest_reg, X_train, y_train)
+    print_score(forest_reg, X_train, y_train)
 
-
-    print_accuracy_score(forest_reg,X_train,y_train)
-
-    scores = cross_val_score(forest_reg, X_train, y_train, cv=10)
-    print(scores)
-    print(scores.mean())
-
-    print('test')
-    y_test_pred = forest_reg.predict(X_test)
-    output_test_data(X_test_data,y_test_pred)
-
-    #y_pred = forest_reg.predict(X_train)
-    #output_test_data(X_data,y_pred)
-
-    #print_prcm(forest_reg, X_test, y_test)
-    #print_accuracy_score(forest_reg,X_test,y_test)
-
-
-    parameter_space = {
-        "n_estimators": [5,10,20,50,60,70],
-        "criterion": ["gini", "entropy"],
-        "min_samples_leaf": [1,2, 4, 6,8,10,12,14],
-        "max_leaf_nodes" : [-1,2,3,4],
-        "max_features" : [1,2,3,4,5,6]
-    }
-
-    scores = ['precision', 'recall', 'roc_auc','accuracy']
-    scores = []
-
-    for score in scores:
-        print("# Tuning hyper-parameters for %s" % score)
-        print()
-
-        clf = RandomForestClassifier(random_state=42)
-        grid = GridSearchCV(clf, parameter_space, cv=3, n_jobs =-1, scoring='%s' % score)
-        # scoring='%s_macro' % score：precision_macro、recall_macro是用于multiclass/multilabel任务的
-        grid.fit(X_train, y_train)
-
-        print("Best parameters set found on development set:")
-        print()
-        print(grid.best_params_)
-        print(grid.best_score_)
-        print_prcm(grid.best_estimator_,X_train,y_train)
-        print_accuracy_score(grid.best_estimator_, X_train, y_train)
-
-        print()
-        scores = cross_val_score(grid.best_estimator_, X_train, y_train, cv=3)
-        print(scores)
-        print(scores.mean())
-
-
-
-    # param_grid = [
-    #     {'n_neighbors': [ 2,3,4,5], 'weights': ['distance','uniform']}
-    # ]
-    # #,scoring='accuracy'
-    # grid_search = GridSearchCV(KNeighborsClassifier(), param_grid, cv=10, n_jobs=5, scoring='accuracy', verbose=3)
-    # grid_search.fit(X_train, y_train)
-    # print(grid_search.best_params_)
-    # print(grid_search.best_estimator_)
-    # #print(grid_search.cv_results_)
-    # print(grid_search.best_score_)
-    #
-    # print()
-    # scores = cross_val_score(grid_search.best_estimator_, X_train, y_train, cv=5)
-    # print(scores)
-    # print(scores.mean())
-
-    knn_clf = KNeighborsClassifier(algorithm='auto', leaf_size=30, metric='minkowski',
-           metric_params=None, n_jobs=1, n_neighbors=5, p=2,
-           weights='uniform')
-
+    knn_clf = KNeighborsClassifier(n_neighbors=7, weights='uniform')
     knn_clf.fit(X_train,y_train)
+    print_score(knn_clf, X_train, y_train)
 
     voting_clf = VotingClassifier(
-        estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('sgd_clf',sgd_clf)],
-        voting='hard'
+        estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('svc_clf',svc_clf)],
+        voting='soft'
     )
     voting_clf.fit(X_train, y_train)
 
     clf = voting_clf
+    print_score(clf, X_train, y_train)
 
-    scores = cross_val_score(clf, X_train, y_train, cv=6)
-    print(scores)
-
-    # y_train_pred = cross_val_predict(voting_clf, X_train, y_train, cv=3)
-    # cm = confusion_matrix(y_train, y_train_pred)
-    #
-    # print(cm)
-    # print(precision_score(y_train, y_train_pred))
-    # print(recall_score(y_train, y_train_pred) )
-
-    # y_probas_forest = cross_val_predict(clf, X_train, y_train, cv=3, method="predict_proba")
-    # y_scores_forest = y_probas_forest[:, 1]  # score = proba of positive class
-    # fpr_forest, tpr_forest, thresholds_forest = roc_curve(y_train, y_scores_forest)
-    # print(fpr_forest, tpr_forest, thresholds_forest )
-    # print(roc_auc_score(y_train, y_scores_forest))
+    print('test')
+    y_test_pred = clf.predict(X_test)
+    output_test_data(X_test_data,y_test_pred)
 
 if __name__ == '__main__':
     titanic_predict()
