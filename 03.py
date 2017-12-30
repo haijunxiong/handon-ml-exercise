@@ -41,6 +41,20 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.naive_bayes import GaussianNB
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import BernoulliNB
+from matplotlib.colors import ListedColormap
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_moons, make_circles, make_classification
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
 
 # to make this notebook's output stable across runs
 np.random.seed(42)
@@ -210,7 +224,7 @@ def get_titanic_data(file_name):
         ('imputer', Imputer(strategy="median")),
         # ('attribs_adder', CombinedAttributesAdder()),
         #("PolynomialFeatures",PolynomialFeatures(degree=4, include_bias=False)),
-        #('std_scaler', StandardScaler()),
+        ('std_scaler', StandardScaler()),
     ])
 
     cat_pipeline = Pipeline([
@@ -236,7 +250,8 @@ def print_accuracy_score(clf,X_test,y_test):
 
 def output_test_data(X_test,y_pred):
     df = pd.DataFrame(data={'PassengerId': X_test["PassengerId"],'Survived': y_pred})
-    df.to_csv("d:/titanic.csv",columns=["PassengerId","Survived"],index=False)
+    titanic_path = os.path.join("datasets", "titanic", "gender_submission.csv")
+    df.to_csv(titanic_path,columns=["PassengerId","Survived"],index=False)
 
 
 def grid_search_clf(clf, parameter_space, X_train, y_train, score='accuracy'):
@@ -265,6 +280,17 @@ def titanic_sgd():
     grid_search_clf(sgd_clf,parameter_space,X_train,y_train)
 
 
+def titanic_ada():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+    clf = AdaBoostClassifier(random_state=42)
+
+    parameter_space = {
+        "n_estimators": [1,5,10,100,200],
+        "learning_rate": [0.1, 0.2, 0.5, 1.0,1.5]
+    }
+
+    grid_search_clf(clf, parameter_space,X_train,y_train)
+
 def titanic_knn():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
@@ -280,37 +306,36 @@ def titanic_forest():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
     parameter_space = {
-        "n_estimators": [80,90,100,110],
+        "n_estimators": [30, 40,60],
         "criterion": ["gini", "entropy"],
         "min_samples_leaf": [3, 4,5, 6],
         "max_leaf_nodes" : [-1,2,3],
-        "max_features" : [4,5,6,7,8,9,10,11]
+        "max_features" : [4,5,6,7,8,9,10,11,12,13]
     }
 
     grid_search_clf(RandomForestClassifier(), parameter_space, X_train, y_train)
+
 
 def titanic_svc():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
     parameter_space = [
         {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
-        {'C': [1, 10, 100, 1000,1100,1200], 'gamma': [0.1, 0.01, 0.001, 0.0001], 'kernel': ['rbf']},
+        {'C': [0.5,1,2,5, 10, 100, 1000,1100,1200], 'gamma': [0.3, 0.2, 0.1,  0.01, 0.001, 0.0001], 'kernel': ['rbf']},
         {'C': [1,3,5,10], 'degree' : [2,3,4,5],  'kernel' : ["poly"] }
     ]
 
     grid_search_clf(SVC(), parameter_space, X_train, y_train)
 
+
 def titanic_bayes():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
-    parameter_space = [
-    ]
-
-    #grid_search_clf(GaussianNB(), parameter_space, X_train, y_train)
-
-    clf =BernoulliNB()
-    clf.fit(X_train,y_train)
-    print_score(clf,X_train,y_train)
+    parameter_space = {
+        'binarize': [0, 0.25, 0.5, 0.75,1],
+        #'alpha ': [0.0, 1.0]
+    }
+    grid_search_clf(BernoulliNB(), parameter_space, X_train, y_train)
 
 
 def print_score(clf,X_train, y_train):
@@ -333,13 +358,17 @@ def titanic_predict():
     # sgd_clf = SGDClassifier(random_state=42)
     # sgd_clf.fit(X_train, y_train)
     # print_score(sgd_clf,X_train,y_train)
+    #**{'C': 3, 'degree': 3, 'kernel': 'poly', 'probability': True},
 
-    svc_clf = SVC(**{'C': 3, 'degree': 3, 'kernel': 'poly','probability':True})
+    svc_clf = SVC(**{'kernel': 'rbf', 'C': 2, 'gamma': 0.1}, probability=True,  random_state=42)
     svc_clf.fit(X_train, y_train)
     print_score(svc_clf,X_train,y_train)
 
+    bayes_clf = BernoulliNB(**{'binarize': 0.25})
+    bayes_clf.fit(X_train, y_train)
+    print_score(bayes_clf,X_train,y_train)
 
-    forest_reg = RandomForestClassifier(**{'n_estimators': 80, 'max_leaf_nodes': -1, 'criterion': 'entropy', 'max_features': 10, 'min_samples_leaf': 5}, random_state=42)
+    forest_reg = RandomForestClassifier(**{'criterion': 'gini', 'max_leaf_nodes': -1, 'min_samples_leaf': 4, 'max_features': 6, 'n_estimators': 30}, random_state=42)
     forest_reg.fit(X_train, y_train)
     print_score(forest_reg, X_train, y_train)
 
@@ -347,9 +376,14 @@ def titanic_predict():
     knn_clf.fit(X_train,y_train)
     print_score(knn_clf, X_train, y_train)
 
+    ada_clf = AdaBoostClassifier(**{'learning_rate': 0.5, 'n_estimators': 10}, random_state=42)
+    ada_clf.fit(X_train,y_train)
+    print_score(ada_clf, X_train, y_train)
+
     voting_clf = VotingClassifier(
-        estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('svc_clf',svc_clf)],
-        voting='soft'
+        #estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('svc_clf',svc_clf),('bayes_clf',bayes_clf),('ada_clf', ada_clf)],
+        estimators=[('forest_reg', forest_reg),   ('svc_clf', svc_clf) ,   ('ada_clf', ada_clf)],
+        voting='hard'
     )
     voting_clf.fit(X_train, y_train)
 
@@ -360,5 +394,6 @@ def titanic_predict():
     y_test_pred = clf.predict(X_test)
     output_test_data(X_test_data,y_test_pred)
 
+
 if __name__ == '__main__':
-    titanic_bayes()
+    titanic_predict()
