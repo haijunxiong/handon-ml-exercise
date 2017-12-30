@@ -186,9 +186,11 @@ def get_titanic_data(file_name):
     #data["Sex"].fillna(value='unknow', inplace=True)
     #data["Cabin"].fillna(value='unknow', inplace=True)
 
-    data["CabinCat"] = data["Cabin"].isnull()
+    data["CabinCat"] = data["Cabin"].str.get(0).fillna('N')
     data["AgeBucket"] = data["Age"] // 15 * 15
     data["RelativesOnboard"] = data["SibSp"] + data["Parch"]
+    data["Title"] = data.Name.str.extract('([A-Za-z]+)\.', expand=False)
+    data["FirstName"] = data.Name.str.extract('([A-Za-z]+),', expand=False)
 
     #data["Fare_cat"] = np.ceil(data["Fare"] / 50)
 
@@ -204,38 +206,37 @@ def get_titanic_data(file_name):
         X_data = data
         y_data = None
 
-    #X_test = strat_test_set.drop("Survived", axis=1)
-    #y_test = strat_test_set["Survived"].copy()
 
-
-    #print(list(data))
-    #data_num = data[["Fare", "Parch", "Age", "SibSp", "RelativesOnboard"]]
-    #cat_attribs = ["Pclass","Sex",  "Embarked","AgeBucket"]
-
-    data_num = data[["Fare","Parch","RelativesOnboard","Age", "SibSp"]]
-
-    num_attribs = list(data_num)
+    num_attribs = ["Fare","Parch","RelativesOnboard","Age", "SibSp"]
     print(num_attribs)
-    cat_attribs = ["Pclass","CabinCat","Sex", "Embarked"]
-
+    cat_attribs = ["Pclass","CabinCat","Sex", "Embarked","FirstName"]
 
     num_pipeline = Pipeline([
         ('selector', DataFrameSelector(num_attribs)),
         ('imputer', Imputer(strategy="median")),
         # ('attribs_adder', CombinedAttributesAdder()),
-        #("PolynomialFeatures",PolynomialFeatures(degree=4, include_bias=False)),
         ('std_scaler', StandardScaler()),
     ])
 
     cat_pipeline = Pipeline([
         ('cat_selector', DataFrameSelector(cat_attribs)),
         ("imputer", MostFrequentImputer()),
-        ('cat_encoder', CategoricalEncoder(encoding="onehot-dense")),
+        ('cat_encoder', CategoricalEncoder(encoding="ordinal")),
     ])
+
+    cat_pipeline2 = Pipeline([
+        ('cat_selector', DataFrameSelector(['Title'])),
+        ("imputer", MostFrequentImputer()),
+        ('cat_encoder', CategoricalEncoder(categories=[['Capt', 'Col', 'Countess', 'Don', 'Dr', 'Jonkheer', 'Lady', 'Major', 'Master', 'Miss', 'Mlle', 'Mme', 'Mr', 'Mrs', 'Ms', 'Rev', 'Sir', 'Dona']],
+                                           encoding="onehot-dense")),
+    ])
+
+
 
     full_pipeline = FeatureUnion(transformer_list=[
         ("num_pipeline", num_pipeline),
         ("cat_pipeline", cat_pipeline),
+        ("cat_pipeline2",cat_pipeline2)
     ])
 
     X_data_prepared = full_pipeline.fit_transform(X_data)
@@ -295,7 +296,7 @@ def titanic_knn():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
     parameter_space = {
-        "n_neighbors": [1,2,3,5,6,7],
+        "n_neighbors": [1,2,3,5,6,7,8,9,10],
         "weights" : ['uniform','distance']
     }
 
@@ -306,11 +307,11 @@ def titanic_forest():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
     parameter_space = {
-        "n_estimators": [30, 40,60],
+        "n_estimators": [5,9,10, 20,30, 40,50,60,70,80],
         "criterion": ["gini", "entropy"],
-        "min_samples_leaf": [3, 4,5, 6],
-        "max_leaf_nodes" : [-1,2,3],
-        "max_features" : [4,5,6,7,8,9,10,11,12,13]
+        "min_samples_leaf": [1,2,3, 4,5, 6,7,8],
+        #"max_leaf_nodes" : [-1,2,3],
+        "max_features" : [7,8,9,10]
     }
 
     grid_search_clf(RandomForestClassifier(), parameter_space, X_train, y_train)
@@ -320,9 +321,9 @@ def titanic_svc():
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
     parameter_space = [
-        {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
-        {'C': [0.5,1,2,5, 10, 100, 1000,1100,1200], 'gamma': [0.3, 0.2, 0.1,  0.01, 0.001, 0.0001], 'kernel': ['rbf']},
-        {'C': [1,3,5,10], 'degree' : [2,3,4,5],  'kernel' : ["poly"] }
+       # {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
+        {'C': [1, 5, 10, 100,110], 'gamma': [ 0.1,  0.02, 0.01, 0.001, 0.0001], 'kernel': ['rbf']},
+        #{'C': [1,3,5], 'degree' : [2,3],  'kernel' : ["poly"] }
     ]
 
     grid_search_clf(SVC(), parameter_space, X_train, y_train)
@@ -336,6 +337,23 @@ def titanic_bayes():
         #'alpha ': [0.0, 1.0]
     }
     grid_search_clf(BernoulliNB(), parameter_space, X_train, y_train)
+
+def titanic_voting(forest_reg,knn_clf,svc_clf,bayes_clf,ada_clf):
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+
+    parameter_space = {
+         'weights' : [[4, 1, 2, 1, 1], [5, 1, 3, 1, 1]],
+    }
+    clf = VotingClassifier(
+        estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf), ('svc_clf', svc_clf), ('bayes_clf', bayes_clf),
+                    ('ada_clf', ada_clf)],
+        # estimators=[('forest_reg', forest_reg),   ('svc_clf', svc_clf) ,   ('ada_clf', ada_clf)],
+
+        voting='hard'
+    )
+
+
+    grid_search_clf(clf, parameter_space, X_train, y_train)
 
 
 def print_score(clf,X_train, y_train):
@@ -355,20 +373,23 @@ def titanic_predict():
 
     X_test, y_test, X_test_data = get_titanic_data("test.csv")
 
+    print(X_train.shape)
+    print(X_test.shape)
+
     # sgd_clf = SGDClassifier(random_state=42)
     # sgd_clf.fit(X_train, y_train)
     # print_score(sgd_clf,X_train,y_train)
     #**{'C': 3, 'degree': 3, 'kernel': 'poly', 'probability': True},
 
-    svc_clf = SVC(**{'kernel': 'rbf', 'C': 2, 'gamma': 0.1}, probability=True,  random_state=42)
+    svc_clf = SVC(**{'C': 100, 'kernel': 'rbf', 'gamma': 0.001}, probability=True,  random_state=42)
     svc_clf.fit(X_train, y_train)
     print_score(svc_clf,X_train,y_train)
 
-    bayes_clf = BernoulliNB(**{'binarize': 0.25})
+    bayes_clf = BernoulliNB(**{'binarize': 0})
     bayes_clf.fit(X_train, y_train)
     print_score(bayes_clf,X_train,y_train)
 
-    forest_reg = RandomForestClassifier(**{'criterion': 'gini', 'max_leaf_nodes': -1, 'min_samples_leaf': 4, 'max_features': 6, 'n_estimators': 30}, random_state=42)
+    forest_reg = RandomForestClassifier(**{'max_features': 9, 'n_estimators': 40, 'min_samples_leaf': 4, 'criterion': 'entropy'},  random_state=42)
     forest_reg.fit(X_train, y_train)
     print_score(forest_reg, X_train, y_train)
 
@@ -376,13 +397,16 @@ def titanic_predict():
     knn_clf.fit(X_train,y_train)
     print_score(knn_clf, X_train, y_train)
 
-    ada_clf = AdaBoostClassifier(**{'learning_rate': 0.5, 'n_estimators': 10}, random_state=42)
+    ada_clf = AdaBoostClassifier(**{'learning_rate': 0.1, 'n_estimators': 100}, random_state=42)
     ada_clf.fit(X_train,y_train)
     print_score(ada_clf, X_train, y_train)
 
+    #titanic_voting(forest_reg,knn_clf,svc_clf,bayes_clf,ada_clf)
+
     voting_clf = VotingClassifier(
-        #estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('svc_clf',svc_clf),('bayes_clf',bayes_clf),('ada_clf', ada_clf)],
-        estimators=[('forest_reg', forest_reg),   ('svc_clf', svc_clf) ,   ('ada_clf', ada_clf)],
+        estimators=[('forest_reg', forest_reg), ('knn_clf', knn_clf),('svc_clf',svc_clf),('ada_clf', ada_clf),('bayes_clf', bayes_clf)],
+        #estimators=[('forest_reg', forest_reg),   ('svc_clf', svc_clf) ,   ('ada_clf', ada_clf)],
+        weights=[1,1,1,1,1],
         voting='hard'
     )
     voting_clf.fit(X_train, y_train)
