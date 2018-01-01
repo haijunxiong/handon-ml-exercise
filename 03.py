@@ -51,7 +51,7 @@ from sklearn.svm import SVC
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.gaussian_process.kernels import RBF
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, ExtraTreesClassifier,GradientBoostingClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
@@ -207,8 +207,8 @@ def get_titanic_data(file_name):
     titanic_path = os.path.join("datasets", "titanic", file_name)
     data = pd.read_csv(titanic_path)
 
-    shuffled_indices = np.random.permutation(len(data))
-    data = data.iloc[shuffled_indices]
+    # shuffled_indices = np.random.permutation(len(data))
+    # data = data.iloc[shuffled_indices]
 
 #    data_num = data.drop(labels=["PassengerId", "Name", "Survived", "Embarked", "Sex", "Ticket", "Cabin"], axis=1)
 #   y_train = data["Survived"].copy()
@@ -341,6 +341,18 @@ def titanic_sgd():
     return grid_search_clf(sgd_clf,parameter_space,X_train,y_train)
 
 
+def titanic_gbrt():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+    clf = GradientBoostingClassifier(random_state=42)
+
+    parameter_space = {
+        "n_estimators": [1,5,10,100,200],
+        "learning_rate": [0.1, 0.2, 0.5, 1.0],
+        "max_depth": [1,2,3,4,5]
+    }
+
+    return grid_search_clf(clf, parameter_space,X_train,y_train)
+
 def titanic_ada():
     X_train, y_train, X_data = get_titanic_data("train.csv")
     clf = AdaBoostClassifier(random_state=42)
@@ -363,6 +375,19 @@ def titanic_knn():
 
     return grid_search_clf(KNeighborsClassifier(), parameter_space, X_train,y_train)
 
+
+def titanic_extra_tree():
+    X_train, y_train, X_data = get_titanic_data("train.csv")
+
+    parameter_space = {
+        "n_estimators": [3, 5,9,10, 20,30, 40,50,60,70,80],
+        "criterion": ["gini", "entropy"],
+        "min_samples_leaf": [1,2,3, 4,5, 6,7,8],
+        #"max_leaf_nodes" : [-1,2,3],
+        "max_features" : [2,3,5,6,7,8]
+    }
+
+    return  grid_search_clf(ExtraTreesClassifier(random_state=42), parameter_space, X_train, y_train)
 
 def titanic_forest():
     X_train, y_train, X_data = get_titanic_data("train.csv")
@@ -412,7 +437,7 @@ def titanic_voting(forest_reg,knn_clf,svc_clf,bayes_clf,ada_clf):
     X_train, y_train, X_data = get_titanic_data("train.csv")
 
     parameter_space = {
-         'weights' : [[1,1,1,1,1], [3, 1, 2, 1, 1], [2, 1, 2, 1, 1],[4, 1, 2, 1, 1], [10, 1, 1, 1, 1]],
+         'weights' : [[1,1,1,1,1], [3, 1, 2, 1, 1], [2, 1, 2, 1, 1],[4, 1, 2, 1, 1], [2, 1, 1, 1, 1]],
          'voting' : ['soft','hard']
     }
     clf = VotingClassifier(
@@ -450,17 +475,7 @@ def titanic_predict():
     # print_score(sgd_clf,X_train,y_train)
     #**{'C': 3, 'degree': 3, 'kernel': 'poly', 'probability': True},
 
-    svc_clf = titanic_svc()
-
-    bayes_clf = titanic_bayes()
-
-    forest_reg = titanic_forest()
-
-    knn_clf = titanic_knn()
-
-    ada_clf = titanic_ada()
-
-    voting_clf = titanic_voting(forest_reg,knn_clf,svc_clf,bayes_clf,ada_clf)
+    voting_clf = titanic_voting(titanic_forest(), titanic_extra_tree(), titanic_svc(), titanic_gbrt(), titanic_ada())
 
     clf = voting_clf
     #print_score(clf, X_train, y_train)
